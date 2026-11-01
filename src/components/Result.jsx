@@ -25,10 +25,10 @@ const Result = ({ res, totalResult, index,type }) => {
             setAnswer(replaceStar(res))
         }
 
-    }, [])
+    }, [res])
 
     const renderer = {
-        code({ node, inline, className, children, ...props }) {
+        code({ inline, className, children, ...props }) {
           const match = /language-(\w+)/.exec(className || '');
           return !inline && match ? (
             <SyntaxHighlighter

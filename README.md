@@ -1,17 +1,15 @@
-# React + Vite
+# AI Chatbot
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+## Setup
 
-Currently, two official plugins are available:
+1. Copy `.env.example` to `.env.local`.
+2. Set `GEMINI_API_KEY` to a new Gemini API key.
+3. Start the app with `npm run dev`.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+The browser calls the local `/api/gemini` endpoint. Vite forwards the request
+server-side, so the Gemini key is never included in the client bundle. The
+previous key was exposed in source control and should be revoked in Google AI
+Studio; do not reuse it.
 
-## React Compiler
-
-The React Compiler is not enabled on this template. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
-"# AI-Chatbot" 
+Requests have a 30-second timeout and display API, configuration, and network
+failures in the chat UI instead of leaving the loading indicator active.

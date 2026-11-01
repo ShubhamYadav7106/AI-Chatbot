@@ -1,99 +1,133 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { URL } from './MyApi';
 import RecentSearch from './RecentSearch';
-import QuestionAnswer from './questionAnswer';
+import QuestionAnswer from './QuestionAnswer';
 
 const MainUi = () => {
     const [query, setQuery] = useState('');
     const [result, setResult] = useState([]);
-    const [recentHistory, setRecentHistory] = useState(JSON.parse(localStorage.getItem('history')))
-    const [selectedHistory, setSelectedHistory] = useState('')
-    const scrollToAns = useRef()
-    const [loader, setLoader] = useState(false)
-
-    const askHandler = async () => {
-        if (!query.trim() && !selectedHistory) {
-            return false;
+    const [recentHistory, setRecentHistory] = useState(() => {
+        try {
+            const history = JSON.parse(localStorage.getItem('history'));
+            return Array.isArray(history) ? history : [];
+        } catch {
+            return [];
         }
-        if (query) {
+    });
+    const scrollToAns = useRef();
+    const [loader, setLoader] = useState(false);
+    const [error, setError] = useState('');
+
+    const askHandler = async (message = query) => {
+        const payloadData = message.trim();
+        if (!payloadData || loader) {
+            return;
+        }
+
+        if (message === query) {
             if (localStorage.getItem('history')) {
-                let history = JSON.parse(localStorage.getItem('history'))
-                history=history.slice(0,19)
-                history = [query, ...history]
-                history=history.map((item)=>(
-                    item.charAt(0).toUpperCase()+item.slice(1).trim()
-                ))
-                history=[...new  Set(history)]
-                localStorage.setItem('history', JSON.stringify(history))
-                setRecentHistory(history)
-
+                let history;
+                try {
+                    history = JSON.parse(localStorage.getItem('history'));
+                } catch {
+                    history = [];
+                }
+                history = Array.isArray(history) ? history.slice(0, 19) : [];
+                history = [message, ...history].map((item) => (
+                    item.charAt(0).toUpperCase() + item.slice(1).trim()
+                ));
+                history = [...new Set(history)];
+                localStorage.setItem('history', JSON.stringify(history));
+                setRecentHistory(history);
             } else {
-                localStorage.setItem('history', JSON.stringify([query]))
-                setRecentHistory([query])
+                localStorage.setItem('history', JSON.stringify([message]));
+                setRecentHistory([message]);
             }
-
         }
-
-        const payloadData = query ? query : selectedHistory
 
         const payload = {
             contents: [
                 {
                     parts: [{ text: payloadData }]
                 }
-            ]
+            ],
+            generationConfig: {
+                thinkingConfig: {
+                    thinkingLevel: 'low',
+                },
+            },
         };
 
-        setLoader(true)
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 60000);
+        setLoader(true);
+        setError('');
         try {
-            let response = await fetch(URL, {
+            const response = await fetch(URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
+                body: JSON.stringify(payload),
+                signal: controller.signal,
             });
             if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
+                let detail = '';
+                try {
+                    const errorBody = await response.json();
+                    const apiError = errorBody.error;
+                    detail = typeof apiError === 'string'
+                        ? apiError
+                        : apiError?.message || errorBody.message || '';
+                } catch {
+                    // The proxy may return a plain-text error.
+                }
+                throw new Error(detail || `Request failed (HTTP ${response.status}).`);
             }
-            response = await response.json();
-            let dataString = response.candidates[0].content.parts[0].text;
+            const responseData = await response.json();
+            let dataString = responseData.candidates?.[0]?.content?.parts?.[0]?.text;
+            if (!dataString) {
+                throw new Error('Gemini returned an empty response.');
+            }
             dataString = dataString.split("* ").map((item) => item.trim());
 
-            setResult([...result, { type: 'q', text: query ? query : selectedHistory }, { type: 'a', text: dataString }]);
-            setQuery('')
-            console.log(dataString);
-
+            setResult((previous) => [
+                ...previous,
+                { type: 'q', text: payloadData },
+                { type: 'a', text: dataString },
+            ]);
+            setQuery('');
 
             setTimeout(() => {
-                scrollToAns.current.scrollTop = scrollToAns.current.scrollHeight
+                if (scrollToAns.current) {
+                    scrollToAns.current.scrollTop = scrollToAns.current.scrollHeight;
+                }
             }, 500);
-
-            setLoader(false)
-
-
         } catch (error) {
-            console.error("Error fetching data:", error);
-            alert("Something went wrong. Please try again.");
+            const message = error.name === 'AbortError'
+                ? 'The request timed out after 1 minute. Check your connection and try again.'
+                : error.message || 'Unable to get a response. Please try again.';
+            console.error('Error fetching data:', error);
+            setError(message);
+        } finally {
+            clearTimeout(timeout);
+            setLoader(false);
         }
-
     };
-
 
     const isEnter = (e) => {
         if (e.key === 'Enter') {
-            askHandler()
-
+            void askHandler();
         }
-    }
-    useEffect(() => {
-        console.log(selectedHistory)
-        askHandler(selectedHistory)
-    }, [selectedHistory])
+    };
+
+    const selectHistory = (historyItem) => {
+        void askHandler(historyItem);
+    };
 
     return (
         <div className='grid grid-cols-5 h-screen  font-[Verdana]'>
             <div className='col-span-1  bg-zinc-800 text-white text-center'>
             {
-                <RecentSearch recentHistory={recentHistory} setRecentHistory={setRecentHistory} setSelectedHistory={setSelectedHistory} />
+                <RecentSearch recentHistory={recentHistory} setRecentHistory={setRecentHistory} setSelectedHistory={selectHistory} />
             }
         </div>
             <div className='col-span-4 p-10'>
@@ -101,6 +135,7 @@ const MainUi = () => {
                 bg-clip-text text-transparent bg-gradient-to-r from-pink-700 to-violet-700'
                 >Hello User, Ask me Anything</h1>
 
+                {error ? <p role="alert" className="text-center text-red-400 my-2">{error}</p> : null}
                 {
                     loader ? <div role="status" className='text-center my-2'>
                         <svg aria-hidden="true" className="inline w-8 h-8 text-gray-200  animate-spin dark:text-gray-600 fill-purple-600" viewBox="0 0 100 101" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -124,7 +159,7 @@ const MainUi = () => {
                         value={query}
                         onChange={(e) => setQuery(e.target.value)}
                     />
-                    <button className='cursor-pointer' onClick={askHandler}>Ask</button>
+                    <button className='cursor-pointer' onClick={() => void askHandler()}>Ask</button>
                 </div>
             </div>
         </div>
