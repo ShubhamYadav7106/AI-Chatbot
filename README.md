@@ -6,6 +6,11 @@
 2. Set `GEMINI_API_KEY` to a new Gemini API key.
 3. Start the app with `npm run dev`.
 
+For Vercel, add `GEMINI_API_KEY` in the project settings for the
+Development, Preview, and Production environments, then redeploy. The
+`api/gemini.js` serverless function handles production requests; the Vite
+middleware handles local development.
+
 The browser calls the local `/api/gemini` endpoint. Vite forwards the request
 server-side, so the Gemini key is never included in the client bundle. The
 previous key was exposed in source control and should be revoked in Google AI
